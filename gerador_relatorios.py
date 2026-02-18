@@ -3,21 +3,7 @@ import os
 from datetime import datetime
 from gerador_core import gerar_relatorio_streamlit
 
-# --- INÍCIO DO DEBUG ---
-try:
-    # Tenta ir buscar a chave aos segredos do Streamlit
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=api_key)
-    
-    st.sidebar.warning("🛠️ MODO DEBUG: Lista de Modelos Disponíveis")
-    modelos = []
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            modelos.append(m.name)
-    st.sidebar.code(modelos)
-except Exception as e:
-    st.sidebar.error(f"Erro no Debug: {e}")
-# --- FIM DO DEBUG ---
+st.set_page_config(
 
 # Configuração da página
 st.set_page_config(
