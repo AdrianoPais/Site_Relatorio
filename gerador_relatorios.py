@@ -3,10 +3,9 @@ import os
 from datetime import datetime
 from gerador_core import gerar_relatorio_streamlit
 
-st.set_page_config(
-
 # Configuração da página
 st.set_page_config(
+    
     page_title="Gerador Automático de Relatórios Técnicos",
     page_icon="📋",
     layout="wide"
