@@ -12,22 +12,6 @@ from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
 
-# --- INÍCIO DO DEBUG ---
-try:
-    # Tenta ir buscar a chave aos segredos do Streamlit
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=api_key)
-    
-    st.sidebar.warning("🛠️ MODO DEBUG: Lista de Modelos Disponíveis")
-    modelos = []
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            modelos.append(m.name)
-    st.sidebar.code(modelos)
-except Exception as e:
-    st.sidebar.error(f"Erro no Debug: {e}")
-# --- FIM DO DEBUG ---
-
 class GeradorRelatorio:
     def __init__(self, api_key=None):
         """Inicializa o gerador com a API key do Google"""
