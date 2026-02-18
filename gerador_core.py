@@ -1,6 +1,6 @@
 """
 Módulo para geração automática de relatórios técnicos
-Usa Google Gemini 1.5 Flash (Forçado)
+Usa Google Gemini 2.0 Flash (Modelo Confirmado)
 """
 
 import google.generativeai as genai
@@ -28,12 +28,13 @@ class GeradorRelatorio:
         genai.configure(api_key=self.api_key)
         
         # 2. CONFIGURAÇÃO DO MODELO
-        # Vamos usar o 'gemini-1.5-flash'. 
-        # É o modelo mais rápido e com maior quota gratuita atualmente.
+        # Usamos o 'gemini-2.0-flash' que confirmámos estar na tua lista.
         try:
-            self.model = genai.GenerativeModel('gemini-1.5-pro')
+            self.model = genai.GenerativeModel('gemini-2.0-flash')
         except Exception as e:
-            raise RuntimeError(f"Erro ao inicializar modelo Gemini: {e}")
+            # Fallback apenas se o 2.0 falhar
+            print(f"Erro ao carregar 2.0: {e}")
+            self.model = genai.GenerativeModel('gemini-2.5-flash')
 
     def analisar_scripts(self, scripts_content, contexto=""):
         """Usa Gemini para analisar os scripts"""
@@ -43,28 +44,27 @@ class GeradorRelatorio:
             for script in scripts_content
         ])
         
-        # Prompt otimizado para gastar menos tokens
-        prompt = f"""És um sysadmin Linux experiente.
+        prompt = f"""Atua como um Administrador de Sistemas Linux Senior.
 CONTEXTO: {contexto if contexto else "Serviços de Rede Linux"}
-CODIGO:
+SCRIPTS:
 {scripts_text}
 
-Tarefa: Cria um relatório técnico JSON com esta estrutura exata:
+TAREFA: Cria um relatório técnico profissional em JSON com esta estrutura exata:
 {{
-    "RESUMO_EXECUTIVO": "Resumo curto e profissional.",
-    "METODOLOGIA": "Explicação da abordagem.",
-    "COMANDOS_DETALHADOS": "Lista explicada dos principais comandos usados.",
-    "CHECKLIST_SEGURANCA": "Pontos de segurança identificados ou recomendados.",
-    "DIFICULDADES": "Possíveis pontos de falha ou complexidade.",
-    "CONCLUSAO": "Conclusão final."
+    "RESUMO_EXECUTIVO": "Resumo executivo do projeto e objetivos.",
+    "METODOLOGIA": "Explicação técnica da abordagem utilizada.",
+    "COMANDOS_DETALHADOS": "Lista detalhada e explicada dos comandos principais.",
+    "CHECKLIST_SEGURANCA": "Medidas de segurança implementadas ou recomendadas.",
+    "DIFICULDADES": "Desafios técnicos potenciais e soluções.",
+    "CONCLUSAO": "Conclusão e recomendações finais."
 }}
 """
         try:
-            # Configuração para resposta rápida
+            # Configuração padrão
             response = self.model.generate_content(prompt)
             texto = response.text
             
-            # Limpeza cirúrgica do JSON
+            # Limpeza do JSON
             texto = re.sub(r'```json\s*|\s*```', '', texto)
             
             try:
