@@ -1,6 +1,6 @@
 """
 Módulo para geração automática de relatórios técnicos
-Usa Google Gemini com Seleção Inteligente de Modelo Gratuito
+Usa Google Gemini 1.5 Flash (Forçado)
 """
 
 import google.generativeai as genai
@@ -15,7 +15,7 @@ import streamlit as st
 
 class GeradorRelatorio:
     def __init__(self, api_key=None):
-        """Inicializa e encontra o melhor modelo disponível"""
+        """Inicializa o gerador com a API key do Google"""
         
         # 1. Configurar API Key
         self.api_key = api_key or os.environ.get("GOOGLE_API_KEY")
@@ -27,51 +27,15 @@ class GeradorRelatorio:
         
         genai.configure(api_key=self.api_key)
         
-        # 2. SELEÇÃO "CIRÚRGICA" DO MODELO
-        # Vamos listar o que a tua conta vê e escolher um seguro.
-        self.model = self._encontrar_modelo_seguro()
-    
-    def _encontrar_modelo_seguro(self):
-        """Procura um modelo gratuito (Flash ou Pro) na lista disponível"""
-        modelo_escolhido = 'gemini-pro' # Fallback final
-        
+        # 2. CONFIGURAÇÃO DO MODELO
+        # Vamos usar o 'gemini-1.5-flash'. 
+        # É o modelo mais rápido e com maior quota gratuita atualmente.
         try:
-            # Lista todos os modelos disponíveis para a tua chave
-            modelos_disponiveis = []
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    modelos_disponiveis.append(m.name)
-            
-            # Ordem de preferência (Do mais rápido/novo para o antigo)
-            # Nota: Ignoramos 'gemini-3' para não estourar a quota
-            preferencias = [
-                'gemini-1.5-flash',
-                'gemini-1.5-flash-001',
-                'gemini-1.5-flash-002',
-                'gemini-1.5-flash-8b',
-                'gemini-pro',
-                'gemini-1.0-pro'
-            ]
-            
-            encontrou = False
-            for pref in preferencias:
-                # O nome na lista vem muitas vezes como "models/gemini-..."
-                # Verificamos se a preferência está contida em algum modelo disponível
-                for disponivel in modelos_disponiveis:
-                    if pref in disponivel:
-                        modelo_escolhido = disponivel
-                        encontrou = True
-                        break
-                if encontrou:
-                    break
-            
-            # Mostra na sidebar qual foi o escolhido (para sabermos que funcionou)
-            st.sidebar.success(f"🤖 Modelo Conectado: {modelo_escolhido.replace('models/', '')}")
-            
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
         except Exception as e:
-            st.sidebar.warning(f"Aviso: Seleção automática falhou ({str(e)}). Usando padrão.")
-            
-        return genai.GenerativeModel(modelo_escolhido)
+            # Se falhar, tenta o legacy
+            print(f"Erro ao carregar Flash: {e}")
+            self.model = genai.GenerativeModel('gemini-pro')
 
     def analisar_scripts(self, scripts_content, contexto=""):
         """Usa Gemini para analisar os scripts"""
@@ -81,25 +45,29 @@ class GeradorRelatorio:
             for script in scripts_content
         ])
         
-        prompt = f"""Atua como especialista Linux. Analisa e cria JSON.
-CONTEXTO: {contexto if contexto else "Serviços Linux"}
-SCRIPTS:
+        # Prompt otimizado para gastar menos tokens
+        prompt = f"""És um sysadmin Linux experiente.
+CONTEXTO: {contexto if contexto else "Serviços de Rede Linux"}
+CODIGO:
 {scripts_text}
 
-Gera JSON válido:
+Tarefa: Cria um relatório técnico JSON com esta estrutura exata:
 {{
-    "RESUMO_EXECUTIVO": "Resumo...",
-    "METODOLOGIA": "Metodologia...",
-    "COMANDOS_DETALHADOS": "Passo a passo...",
-    "CHECKLIST_SEGURANCA": "Itens...",
-    "DIFICULDADES": "Desafios...",
-    "CONCLUSAO": "Conclusão..."
-}}"""
-
+    "RESUMO_EXECUTIVO": "Resumo curto e profissional.",
+    "METODOLOGIA": "Explicação da abordagem.",
+    "COMANDOS_DETALHADOS": "Lista explicada dos principais comandos usados.",
+    "CHECKLIST_SEGURANCA": "Pontos de segurança identificados ou recomendados.",
+    "DIFICULDADES": "Possíveis pontos de falha ou complexidade.",
+    "CONCLUSAO": "Conclusão final."
+}}
+"""
         try:
+            # Configuração para resposta rápida
             response = self.model.generate_content(prompt)
             texto = response.text
-            texto = re.sub(r'```json\s*|\s*```', '', texto) # Limpar markdown
+            
+            # Limpeza cirúrgica do JSON
+            texto = re.sub(r'```json\s*|\s*```', '', texto)
             
             try:
                 return json.loads(texto)
@@ -107,12 +75,11 @@ Gera JSON válido:
                 return self._parse_resposta_manual(texto)
                 
         except Exception as e:
-            # Se der erro, mostra exatamente o que falhou
-            raise Exception(f"Erro na IA ({self.model.model_name}): {str(e)}")
+            raise Exception(f"Erro no Modelo ({self.model.model_name}): {str(e)}")
     
     def _parse_resposta_manual(self, resposta):
         return {
-            "RESUMO_EXECUTIVO": "Erro JSON. Ver abaixo.",
+            "RESUMO_EXECUTIVO": "Erro ao processar JSON. Texto gerado abaixo.",
             "METODOLOGIA": "-",
             "COMANDOS_DETALHADOS": resposta,
             "CHECKLIST_SEGURANCA": "-",
@@ -125,13 +92,17 @@ Gera JSON válido:
         doc = Document()
         self._configurar_estilos(doc)
         
+        # Capa
         doc.add_heading(info_projeto['nome_projeto'], 0)
         doc.add_paragraph(f"Autor: {info_projeto['autor']}")
+        doc.add_paragraph(f"Data: {info_projeto['data']}")
+        doc.add_page_break()
         
+        # Secções
         mapa = {
             'Resumo Executivo': 'RESUMO_EXECUTIVO',
             'Metodologia': 'METODOLOGIA',
-            'Comandos': 'COMANDOS_DETALHADOS',
+            'Comandos Utilizados': 'COMANDOS_DETALHADOS',
             'Segurança': 'CHECKLIST_SEGURANCA',
             'Dificuldades': 'DIFICULDADES',
             'Conclusão': 'CONCLUSAO'
@@ -139,7 +110,15 @@ Gera JSON válido:
         
         for titulo, chave in mapa.items():
             doc.add_heading(titulo, 1)
-            doc.add_paragraph(str(dados.get(chave, '')))
+            conteudo = str(dados.get(chave, ''))
+            
+            if chave == 'CHECKLIST_SEGURANCA':
+                for item in conteudo.split('\n'):
+                    item = item.strip().lstrip('-•* ')
+                    if item:
+                        doc.add_paragraph(item, style='List Bullet')
+            else:
+                doc.add_paragraph(conteudo)
             
         doc.save(output_path)
         return output_path
