@@ -31,11 +31,9 @@ class GeradorRelatorio:
         # Vamos usar o 'gemini-1.5-flash'. 
         # É o modelo mais rápido e com maior quota gratuita atualmente.
         try:
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            self.model = genai.GenerativeModel('gemini-1.5-pro')
         except Exception as e:
-            # Se falhar, tenta o legacy
-            print(f"Erro ao carregar Flash: {e}")
-            self.model = genai.GenerativeModel('gemini-pro')
+            raise RuntimeError(f"Erro ao inicializar modelo Gemini: {e}")
 
     def analisar_scripts(self, scripts_content, contexto=""):
         """Usa Gemini para analisar os scripts"""
