@@ -23,7 +23,7 @@ class GeradorRelatorio:
         
         genai.configure(api_key=self.api_key)
         # Configuração do modelo
-        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        self.model = genai.GenerativeModel('gemini-pro')
     
     def analisar_scripts(self, scripts_content, contexto=""):
         """
