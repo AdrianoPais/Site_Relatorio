@@ -1,6 +1,6 @@
 """
 Módulo para geração automática de relatórios técnicos
-Usa Google Gemini API (com auto-descoberta de modelo)
+Usa Google Gemini 1.5 Flash (Versão Fixa e Rápida)
 """
 
 import google.generativeai as genai
@@ -11,15 +11,16 @@ from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
-import streamlit as st  # Importante para mostrar erros na sidebar se necessário
+import streamlit as st
 
 class GeradorRelatorio:
     def __init__(self, api_key=None):
-        """Inicializa o gerador com a API key do Google e descobre o modelo"""
-        # 1. Configurar API Key
+        """Inicializa o gerador com a API key do Google"""
+        
+        # 1. Configurar API Key (Prioridade: Argumento > Env > Secrets)
         self.api_key = api_key or os.environ.get("GOOGLE_API_KEY")
+        
         if not self.api_key:
-            # Tenta buscar aos secrets do Streamlit se não estiver no env
             try:
                 self.api_key = st.secrets["GOOGLE_API_KEY"]
             except:
@@ -27,40 +28,14 @@ class GeradorRelatorio:
         
         genai.configure(api_key=self.api_key)
         
-        # 2. AUTO-DESCOBERTA DE MODELO (A Magia acontece aqui)
-        # Em vez de adivinhar o nome, vamos perguntar à API o que ela tem.
-        modelo_para_usar = 'gemini-1.5-flash' # Fallback padrão
-        
+        # 2. DEFINIÇÃO DIRETA DO MODELO
+        # Não vamos mais tentar adivinhar. Vamos usar o Flash diretamente.
+        # Este modelo é rápido e tem uma quota gratuita generosa.
         try:
-            modelos_disponiveis = []
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    modelos_disponiveis.append(m.name)
-            
-            # Tenta encontrar o melhor modelo na lista
-            # Ordem de preferência: Flash (rápido) -> Pro (padrão) -> Qualquer outro
-            encontrado = None
-            for m in modelos_disponiveis:
-                if 'gemini-1.5-flash' in m:
-                    encontrado = m
-                    break
-            
-            if not encontrado:
-                for m in modelos_disponiveis:
-                    if 'gemini-pro' in m:
-                        encontrado = m
-                        break
-            
-            if encontrado:
-                modelo_para_usar = encontrado
-                # Descomenta a linha abaixo se quiseres ver qual foi escolhido na sidebar
-                # st.sidebar.success(f"Modelo conectado: {modelo_para_usar}")
-                
-        except Exception as e:
-            # Se a listagem falhar, usa o padrão e reza
-            print(f"Aviso: Não foi possível listar modelos. Usando {modelo_para_usar}")
-
-        self.model = genai.GenerativeModel(modelo_para_usar)
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+        except:
+            # Fallback de último recurso para o modelo legado
+            self.model = genai.GenerativeModel('gemini-pro')
     
     def analisar_scripts(self, scripts_content, contexto=""):
         """Usa Gemini para analisar os scripts"""
@@ -88,10 +63,11 @@ Gera APENAS um JSON válido (sem markdown) com estas chaves:
 }}
 """
         try:
+            # Configuração para resposta mais criativa mas segura
             response = self.model.generate_content(prompt)
             texto = response.text
             
-            # Limpeza do JSON
+            # Limpeza do JSON (remove ```json se existir)
             texto = re.sub(r'```json\s*|\s*```', '', texto)
             
             try:
@@ -100,41 +76,55 @@ Gera APENAS um JSON válido (sem markdown) com estas chaves:
                 return self._parse_resposta_manual(texto)
                 
         except Exception as e:
+            # Se der erro de quota ou modelo, lança exceção clara
             raise Exception(f"Erro Gemini: {str(e)}")
     
     def _parse_resposta_manual(self, resposta):
         return {
-            "RESUMO_EXECUTIVO": "Erro no formato JSON. Conteúdo gerado abaixo.",
-            "METODOLOGIA": "Ver conteúdo.",
+            "RESUMO_EXECUTIVO": "Ocorreu um erro na formatação JSON. O conteúdo foi gerado abaixo.",
+            "METODOLOGIA": "Consultar secção de comandos.",
             "COMANDOS_DETALHADOS": resposta,
-            "CHECKLIST_SEGURANCA": "Verificar manualmente",
-            "DIFICULDADES": "-",
-            "CONCLUSAO": "-"
+            "CHECKLIST_SEGURANCA": "Verificar scripts manualmente",
+            "DIFICULDADES": "Não processado",
+            "CONCLUSAO": "Não processado"
         }
     
     def gerar_relatorio_completo(self, scripts_content, info_projeto, contexto="", output_path="relatorio.docx"):
+        # 1. Obter dados do AI
         dados = self.analisar_scripts(scripts_content, contexto)
         
+        # 2. Criar Documento
         doc = Document()
         self._configurar_estilos(doc)
         
-        # Estrutura simples do documento
+        # Capa Simples
         doc.add_heading(info_projeto['nome_projeto'], 0)
-        doc.add_paragraph(f"Autor: {info_projeto['autor']}")
-        doc.add_paragraph("\n")
+        p = doc.add_paragraph()
+        p.add_run(f"Autor: {info_projeto['autor']}\n").bold = True
+        p.add_run(f"Data: {info_projeto['data']}")
+        doc.add_page_break()
         
+        # Conteúdo
         mapa = {
             'Resumo Executivo': 'RESUMO_EXECUTIVO',
             'Metodologia': 'METODOLOGIA',
-            'Comandos': 'COMANDOS_DETALHADOS',
-            'Segurança': 'CHECKLIST_SEGURANCA',
+            'Comandos Utilizados': 'COMANDOS_DETALHADOS',
+            'Checklist de Segurança': 'CHECKLIST_SEGURANCA',
             'Dificuldades': 'DIFICULDADES',
             'Conclusão': 'CONCLUSAO'
         }
         
         for titulo, chave in mapa.items():
             doc.add_heading(titulo, 1)
-            doc.add_paragraph(str(dados.get(chave, '')))
+            conteudo = str(dados.get(chave, ''))
+            
+            # Formatação especial para comandos ou listas
+            if chave == 'CHECKLIST_SEGURANCA':
+                for item in conteudo.split('\n'):
+                    if item.strip():
+                        doc.add_paragraph(item.strip(), style='List Bullet')
+            else:
+                doc.add_paragraph(conteudo)
             
         doc.save(output_path)
         return output_path
@@ -146,7 +136,7 @@ Gera APENAS um JSON válido (sem markdown) com estas chaves:
             style.font.name = 'Courier New'
             style.font.size = Pt(9)
 
-# Função Wrapper para o Streamlit usar
+# Wrapper para o Streamlit
 def gerar_relatorio_streamlit(scripts_content, info_projeto, contexto=""):
     from datetime import datetime
     gerador = GeradorRelatorio()
