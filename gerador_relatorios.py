@@ -1,38 +1,53 @@
 import streamlit as st
 import os
+import google.generativeai as genai  # <--- A linha que faltava!
 from datetime import datetime
 from gerador_core import gerar_relatorio_streamlit
 
-# --- BLOCO DE DIAGNÓSTICO (Temporário) ---
-try:
-    # Vai buscar a chave
-    api_key = os.environ.get("GOOGLE_API_KEY") or st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=api_key)
-    
-    st.sidebar.warning("🛠️ MODO DIAGNÓSTICO")
-    
-    # Tenta listar os modelos
-    modelos = []
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            # Guarda o nome limpo (sem 'models/')
-            modelos.append(m.name.replace('models/', ''))
-            
-    st.sidebar.code("\n".join(modelos))
-    
-except Exception as e:
-    st.sidebar.error(f"Erro na Chave/Conexão: {e}")
-# --- FIM DO DIAGNÓSTICO ---
-
 # Configuração da página
 st.set_page_config(
-    
     page_title="Gerador Automático de Relatórios Técnicos",
     page_icon="📋",
     layout="wide"
 )
 
-# CSS customizado para melhor aparência
+# --- INÍCIO DO DIAGNÓSTICO NA SIDEBAR ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🛠️ Diagnóstico de Modelos")
+try:
+    # 1. Tenta obter a chave (Secrets ou Env)
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        try:
+            api_key = st.secrets["GOOGLE_API_KEY"]
+        except:
+            pass
+            
+    if api_key:
+        genai.configure(api_key=api_key)
+        
+        # 2. Lista os modelos disponíveis para a tua conta
+        modelos_disponiveis = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                # Remove o prefixo 'models/' para ficar mais limpo
+                nome = m.name.replace('models/', '')
+                modelos_disponiveis.append(nome)
+        
+        if modelos_disponiveis:
+            st.sidebar.success(f"✅ Conectado! {len(modelos_disponiveis)} modelos encontrados.")
+            st.sidebar.code("\n".join(modelos_disponiveis))
+        else:
+            st.sidebar.warning("⚠️ Conectado, mas nenhum modelo encontrado.")
+    else:
+        st.sidebar.error("❌ API Key não encontrada.")
+except Exception as e:
+    st.sidebar.error(f"Erro de Conexão: {e}")
+st.sidebar.markdown("---")
+# --- FIM DO DIAGNÓSTICO ---
+
+
+# CSS customizado
 st.markdown("""
     <style>
     .main-header {
