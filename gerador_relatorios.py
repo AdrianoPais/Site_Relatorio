@@ -3,6 +3,27 @@ import os
 from datetime import datetime
 from gerador_core import gerar_relatorio_streamlit
 
+# --- BLOCO DE DIAGNÓSTICO (Temporário) ---
+try:
+    # Vai buscar a chave
+    api_key = os.environ.get("GOOGLE_API_KEY") or st.secrets["GOOGLE_API_KEY"]
+    genai.configure(api_key=api_key)
+    
+    st.sidebar.warning("🛠️ MODO DIAGNÓSTICO")
+    
+    # Tenta listar os modelos
+    modelos = []
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            # Guarda o nome limpo (sem 'models/')
+            modelos.append(m.name.replace('models/', ''))
+            
+    st.sidebar.code("\n".join(modelos))
+    
+except Exception as e:
+    st.sidebar.error(f"Erro na Chave/Conexão: {e}")
+# --- FIM DO DIAGNÓSTICO ---
+
 # Configuração da página
 st.set_page_config(
     
